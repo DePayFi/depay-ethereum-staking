@@ -1,5 +1,5 @@
 import chai, { expect } from 'chai'
-import { Contract } from 'ethers'
+import { Contract, Wallet } from 'ethers'
 import { deployContract, solidity, MockProvider } from 'ethereum-waffle'
 
 import DePayStaking from '../build/DePayStaking.json'
