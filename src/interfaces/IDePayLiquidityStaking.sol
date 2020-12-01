@@ -2,6 +2,6 @@
 
 pragma solidity >= 0.7.5;
 
-interface IDePayStaking {
+interface IDePayLiquidityStaking {
 
 }
