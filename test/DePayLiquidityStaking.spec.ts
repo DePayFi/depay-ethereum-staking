@@ -123,6 +123,7 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       liquidityTokenContract,
       tokenContract,
+      stakingContractTokenBalance: defaultTotalStakingRewards,
       totalStakingRewards: defaultTotalStakingRewards
     })
     expect(await contract.startTime()).to.eq(defaultStartTime)
@@ -137,7 +138,12 @@ describe('DePayLiquidityStaking', () => {
   it('prohibits other wallets but the owner to initialize the staking contract', async () => {
     const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
     await expect(
-      init({contract, otherWallet, liquidityTokenContract, tokenContract})
+      init({
+        contract,
+        wallet: otherWallet,
+        liquidityTokenContract,
+        tokenContract
+      })
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Ownable: caller is not the owner'
     )
@@ -146,7 +152,13 @@ describe('DePayLiquidityStaking', () => {
   it('it prohibits the owner to init staking if rewards have not been locked in yet', async () => {
     const {contract, ownerWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
     await expect(
-      init({contract, ownerWallet, liquidityTokenContract, tokenContract})
+      init({
+        contract,
+        wallet: ownerWallet,
+        liquidityTokenContract,
+        tokenContract,
+        totalStakingRewards: defaultTotalStakingRewards
+      })
     ).to.be.revertedWith(
       'Not enough tokens deposited for rewards!'
     )
@@ -154,9 +166,23 @@ describe('DePayLiquidityStaking', () => {
 
   it('prohibits to initialize the staking contract again, when its already started', async () => {
     const {contract, ownerWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({contract, ownerWallet, liquidityTokenContract, tokenContract, totalStakingRewards})
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      totalStakingRewards: defaultTotalStakingRewards,
+      stakingContractTokenBalance: defaultTotalStakingRewards
+    })
     await expect(
-      initStaking(contract, ownerWallet, liquidityTokenContract, tokenContract, totalStakingRewards)
+      init({
+        contract,
+        wallet: ownerWallet,
+        liquidityTokenContract,
+        tokenContract,
+        totalStakingRewards: defaultTotalStakingRewards,
+        stakingContractTokenBalance: defaultTotalStakingRewards
+      })
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking has already started!'
     )
@@ -164,7 +190,14 @@ describe('DePayLiquidityStaking', () => {
 
   it('allows to stake liquidity when staking started', async () => {
     const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({contract, ownerWallet, liquidityTokenContract, tokenContract, totalStakingRewards})
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      totalStakingRewards: defaultTotalStakingRewards,
+      stakingContractTokenBalance: defaultTotalStakingRewards
+    })
     const stakedLiquidityTokenAmount = '2157166313861058934633'
     await stake({
       contract,
@@ -180,15 +213,43 @@ describe('DePayLiquidityStaking', () => {
     expect(await contract.allocatedStakingRewards()).to.eq('450000000000000000000000')
   })
 
-  it('allows to pay less rewards when setup with lower APY', async () => {
+  it('pays less rewards when setup with lower yield reward', async () => {
     const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({contract, ownerWallet, liquidityTokenContract, tokenContract})
-    
+    await init({
+      contract,
+      wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      totalStakingRewards: defaultTotalStakingRewards,
+      stakingContractTokenBalance: defaultTotalStakingRewards,
+      yieldRewards: '80'
+    })
+    const stakedLiquidityTokenAmount = '2157166313861058934633'
+    await stake({
+      contract,
+      liquidityTokenContract,
+      wallet: otherWallet,
+      stakedLiquidityTokenAmount,
+      pairReserve0: '99425305856642687813605',
+      pairReserve1: '206306594448178253923',
+      totalSupply: '4314332627722117869266'
+    })
+    expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('360000000000000000000000')
+    expect(await contract.stakedLiquidityTokenPerAddress(otherWallet.address)).to.eq(stakedLiquidityTokenAmount)
+    expect(await contract.allocatedStakingRewards()).to.eq('360000000000000000000000')
   })
 
   it('prohibits to stake liquidity when staking did not start yet', async () => {
     const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({contract, ownerWallet, liquidityTokenContract, tokenContract})
+    await init({
+      contract,
+      wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      totalStakingRewards: defaultTotalStakingRewards,
+      stakingContractTokenBalance: defaultTotalStakingRewards,
+      startTime: defaultStartTime + 86400
+    })
     await expect(contract.connect(otherWallet).stake('2157166313861058934633')).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking has not yet started!'
     )
@@ -196,17 +257,33 @@ describe('DePayLiquidityStaking', () => {
 
   it('fails when trying to stake more than rewards left', async () => {
     const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({contract, ownerWallet, liquidityTokenContract, tokenContract})
+    await init({
+      contract, wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      totalStakingRewards: defaultTotalStakingRewards,
+      stakingContractTokenBalance: defaultTotalStakingRewards
+    })
     const stakedLiquidityTokenAmount = '2157166313861058934633'
-    await liquidityTokenContract.mock.transferFrom.returns(true)
-    await liquidityTokenContract.mock.getReserves.returns('99425305856642687813605', '206306594448178253923', now)
-    await liquidityTokenContract.mock.totalSupply.returns('4314332627722117869266')
-    await contract.connect(otherWallet).stake(stakedLiquidityTokenAmount)
-    expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('450000000000000000000000')
-    expect(await contract.stakedLiquidityTokenPerAddress(otherWallet.address)).to.eq(stakedLiquidityTokenAmount)
-    expect(await contract.allocatedStakingRewards()).to.eq('450000000000000000000000')
+    await stake({
+      contract,
+      liquidityTokenContract,
+      wallet: otherWallet,
+      stakedLiquidityTokenAmount,
+      pairReserve0: '99425305856642687813605',
+      pairReserve1: '206306594448178253923',
+      totalSupply: '4314332627722117869266'
+    })
     await expect(
-      contract.connect(otherWallet).stake('450000000000000000000001')
+      stake({
+        contract,
+        liquidityTokenContract,
+        wallet: otherWallet,
+        stakedLiquidityTokenAmount: '2157166313861058934634',
+        pairReserve0: '99425305856642687813605',
+        pairReserve1: '206306594448178253923',
+        totalSupply: '4314332627722117869266'
+      })
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking overflows rewards!'
     )
