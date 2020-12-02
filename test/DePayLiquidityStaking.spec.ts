@@ -1,5 +1,6 @@
 import chai, { expect } from 'chai'
 import {
+  BigNumber,
   Contract,
   ContractFactory,
   Wallet 
@@ -12,6 +13,7 @@ import {
 } from 'ethereum-waffle'
 import { deployMockContract } from '@ethereum-waffle/mock-contract'
 import IERC20 from '../build/IERC20.json'
+import Token from '../build/Token.json'
 import IUniswapV2Pair from '../build/IUniswapV2Pair.json'
 import DePayLiquidityStaking from '../build/DePayLiquidityStaking.json'
 
@@ -104,6 +106,22 @@ describe('DePayLiquidityStaking', () => {
     await liquidityTokenContract.mock.getReserves.returns(pairReserve0, pairReserve1, now)
     await liquidityTokenContract.mock.totalSupply.returns(totalSupply)
     await contract.connect(wallet).stake(stakedLiquidityTokenAmount)
+  }
+
+  interface withdrawParameters {
+    contract: Contract,
+    wallet: Wallet,
+    token: string,
+    amount: string
+  }
+
+  async function withdraw({
+    contract,
+    wallet,
+    token,
+    amount
+  }: withdrawParameters) {
+    await contract.connect(wallet).withdraw(token, amount)
   }
 
   it('deploys successfully', async () => {
@@ -258,7 +276,8 @@ describe('DePayLiquidityStaking', () => {
   it('fails when trying to stake more than rewards left', async () => {
     const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
     await init({
-      contract, wallet: ownerWallet,
+      contract,
+      wallet: ownerWallet,
       liquidityTokenContract,
       tokenContract,
       totalStakingRewards: defaultTotalStakingRewards,
@@ -290,6 +309,48 @@ describe('DePayLiquidityStaking', () => {
     expect(await contract.allocatedStakingRewards()).to.eq('450000000000000000000000')
   })
 
+  it('allows to withdraw tokens which ended up in the contract accidentally', async () => {
+    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      stakingContractTokenBalance: defaultTotalStakingRewards
+    })
+    const amount = '1000000000000000000'
+    const anotherTokenContract = await deployContract(otherWallet, Token)
+    await anotherTokenContract.transfer(contract.address, amount)
+    await withdraw({
+      contract,
+      wallet: ownerWallet,
+      token: anotherTokenContract.address,
+      amount: amount
+    })
+    let balance = await anotherTokenContract.balanceOf(ownerWallet.address)
+    expect(
+      balance.toString()
+    ).to.eq(amount)
+  })
+
+  it('allows to withdraw ETH which ended up in the contract accidentally', async () => {
+    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    let balance = await ownerWallet.getBalance()
+    console.log(balance.toString());
+  })
+
+  it('does NOT allow to withdraw liquidity tokens, as they belong to the stakers', async () => {
+    // pending
+  })
+
+  it('does allow to withdraw reward tokens if they have NOT been allocated to stakers yet', async () => {
+    // pending
+  })
+
+  it('does NOT allow to withdraw reward tokens if they have been allocated to stakers', async () => {
+    // pending
+  })
+
   it('uses safemath to prevent overflows when initializing', async () => {
     // pending
   })
@@ -298,11 +359,19 @@ describe('DePayLiquidityStaking', () => {
     // pending
   })
 
+  it('uses safemath to prevent overflows when withdrawing', async () => {
+    // pending
+  })
+
   it('prevents reentrancy on staking', async () => {
     // pending
   })
 
   it('prevents reentrancy on unstaking', async () => {
+    // pending
+  })
+
+  it('prevents reentrancy on withdrawal', async () => {
     // pending
   })
 })

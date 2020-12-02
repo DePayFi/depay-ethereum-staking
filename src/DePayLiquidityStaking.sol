@@ -44,6 +44,9 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   // Stores all amounts of staked liquidity tokens per address
   mapping (address => uint256) public stakedLiquidityTokenPerAddress;
 
+  // Address ZERO
+  address private ZERO = 0x0000000000000000000000000000000000000000;
+
   modifier onlyUnstarted() {
     require(
       startTime == 0 || block.timestamp < startTime,
@@ -103,5 +106,24 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
 
     allocatedStakingRewards = allocatedStakingRewards.add(rewards);
     require(allocatedStakingRewards <= totalStakingRewards, 'Staking overflows rewards!');
+  }
+
+  function payableOwner() view private returns(address payable) {
+    return address(uint160(owner()));
+  }
+    
+  function withdraw(address tokenAddress, uint amount) external onlyOwner nonReentrant {
+    require(tokenAddress != address(liquidityToken), 'Not allowed to withdrawal liquidity tokens!');
+    if(tokenAddress == address(token)) {
+      require(
+        allocatedStakingRewards <= token.balanceOf(address(this)).sub(amount),
+        'Only unallocated staking rewards are allowed to be withdrawn for roll-over to next staking contract!'
+      );
+    }
+    if(tokenAddress == ZERO) {
+      payableOwner().transfer(amount);
+    } else {
+      IERC20(tokenAddress).transfer(payableOwner(), amount);
+    }
   }
 }
