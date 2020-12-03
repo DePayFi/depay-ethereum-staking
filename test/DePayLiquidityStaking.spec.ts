@@ -14,6 +14,7 @@ import {
 import { deployMockContract } from '@ethereum-waffle/mock-contract'
 import IERC20 from '../build/IERC20.json'
 import Token from '../build/Token.json'
+import UniswapV2Pair from '../build/UniswapV2Pair.json'
 import IUniswapV2Pair from '../build/IUniswapV2Pair.json'
 import DePayLiquidityStaking from '../build/DePayLiquidityStaking.json'
 
@@ -22,18 +23,14 @@ chai.use(solidity)
 describe('DePayLiquidityStaking', () => {
   
   const provider = new MockProvider()
-  const [ownerWallet, otherWallet] = provider.getWallets()
-  const now = Math.round(new Date().getTime() / 1000)
+  const { waffle } = require("hardhat")
   
-  const defaultStartTime = now // now in seconds
-  const defaultEndTime = defaultStartTime + 2610000 // + 1 month
-  const defaultReleaseTime = defaultStartTime + 31536000 // + 12 month
-  const defaultYieldRewards = '100' // for 100%
-  const defaultTotalStakingRewards = '900000000000000000000000' // 900,000 DEPAY
+  const [ownerWallet, otherWallet] = provider.getWallets()
+  let now = () => Math.round(new Date().getTime() / 1000)
   
   async function fixture([ownerWallet, otherWallet]: Wallet[], provider: MockProvider) {
+    await waffle.provider.send('evm_setNextBlockTimestamp', [now()+2])
     const contract = await deployContract(ownerWallet, DePayLiquidityStaking)
-
     const tokenContract = await deployMockContract(ownerWallet, IERC20.abi)
     const liquidityTokenContract = await deployMockContract(ownerWallet, IUniswapV2Pair.abi)
 
@@ -51,11 +48,11 @@ describe('DePayLiquidityStaking', () => {
     wallet: Wallet,
     liquidityTokenContract: Contract,
     tokenContract: Contract,
-    stakingContractTokenBalance?: string,
-    yieldRewards?: string,
-    totalStakingRewards?: string,
+    rewardsBalance?: string,
+    percentageYield?: string,
+    rewardsAmount?: string,
     startTime?: number,
-    endTime?: number,
+    closeTime?: number,
     releaseTime?: number
   }
 
@@ -64,47 +61,61 @@ describe('DePayLiquidityStaking', () => {
     wallet,
     liquidityTokenContract,
     tokenContract,
-    stakingContractTokenBalance='0',
-    yieldRewards=defaultYieldRewards,
-    totalStakingRewards=defaultTotalStakingRewards,
-    startTime=defaultStartTime,
-    endTime=defaultEndTime,
-    releaseTime=defaultReleaseTime
+    rewardsBalance = '0',
+    percentageYield = '100', // for 100%
+    rewardsAmount = '900000000000000000000000', // 900,000 DEPAY
+    startTime = now() - 10,
+    closeTime = now() + 2610000, // + 1 month
+    releaseTime = now() + 31536000 // + 12 month
   }: initParameters) {
-    await tokenContract.mock.balanceOf.returns(stakingContractTokenBalance)
+    if(tokenContract.mock) {
+      await tokenContract.mock.balanceOf.returns(rewardsBalance)
+    }
     await contract.connect(wallet).init(
       startTime,
-      endTime,
+      closeTime,
       releaseTime,
-      yieldRewards,
-      totalStakingRewards,
+      percentageYield,
+      rewardsAmount,
       liquidityTokenContract.address,
       tokenContract.address
     )
+    return {
+      startTime,
+      closeTime,
+      releaseTime,
+      percentageYield,
+      rewardsAmount
+    }
   }
 
   interface stakeParameters {
     contract: Contract,
+    tokenContractAddress: string,
     liquidityTokenContract: Contract,
     wallet: Wallet,
     stakedLiquidityTokenAmount: string,
-    pairReserve0: string,
-    pairReserve1: string,
-    totalSupply: string
+    pairReserve0?: string,
+    pairReserve1?: string,
+    totalSupply?: string
   }
 
   async function stake({
     contract,
+    tokenContractAddress,
     liquidityTokenContract,
     wallet,
     stakedLiquidityTokenAmount,
     pairReserve0,
-    pairReserve1,
+    pairReserve1 = '2000000000000000000000',
     totalSupply
   }: stakeParameters) {
-    await liquidityTokenContract.mock.transferFrom.returns(true)
-    await liquidityTokenContract.mock.getReserves.returns(pairReserve0, pairReserve1, now)
-    await liquidityTokenContract.mock.totalSupply.returns(totalSupply)
+    if(liquidityTokenContract.mock) {
+      await liquidityTokenContract.mock.transferFrom.returns(true)
+      await liquidityTokenContract.mock.getReserves.returns(pairReserve0, pairReserve1, now())
+      await liquidityTokenContract.mock.totalSupply.returns(totalSupply)
+      await liquidityTokenContract.mock.token0.returns(tokenContractAddress)
+    }
     await contract.connect(wallet).stake(stakedLiquidityTokenAmount)
   }
 
@@ -124,6 +135,18 @@ describe('DePayLiquidityStaking', () => {
     await contract.connect(wallet).withdraw(token, amount)
   }
 
+  interface unstakeParameters {
+    contract: Contract,
+    wallet: Wallet
+  }
+
+  async function unstake({
+    contract,
+    wallet,
+  }: unstakeParameters) {
+    await contract.connect(wallet).unstake()
+  }
+
   it('deploys successfully', async () => {
     loadFixture(fixture)
   })
@@ -135,32 +158,48 @@ describe('DePayLiquidityStaking', () => {
   })
 
   it('allows the owner to initialize the staking contract', async () => {
-    const {contract, ownerWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({
+    const {
+      contract,
+      ownerWallet,
+      liquidityTokenContract,
+      tokenContract
+    } = await loadFixture(fixture)
+    const {
+      startTime,
+      closeTime,
+      releaseTime,
+      percentageYield,
+      rewardsAmount
+    } = await init({
       contract,
       wallet: ownerWallet,
       liquidityTokenContract,
       tokenContract,
-      stakingContractTokenBalance: defaultTotalStakingRewards,
-      totalStakingRewards: defaultTotalStakingRewards
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000'
     })
-    expect(await contract.startTime()).to.eq(defaultStartTime)
-    expect(await contract.endTime()).to.eq(defaultEndTime)
-    expect(await contract.releaseTime()).to.eq(defaultReleaseTime)
-    expect(await contract.yield()).to.eq(defaultYieldRewards)
-    expect(await contract.totalStakingRewards()).to.eq(defaultTotalStakingRewards)
+    expect(await contract.startTime()).to.eq(startTime)
+    expect(await contract.closeTime()).to.eq(closeTime)
+    expect(await contract.releaseTime()).to.eq(releaseTime)
+    expect(await contract.percentageYield()).to.eq(percentageYield)
+    expect(await contract.rewardsAmount()).to.eq(rewardsAmount)
     expect(await contract.liquidityToken()).to.eq(liquidityTokenContract.address)
     expect(await contract.token()).to.eq(tokenContract.address)
   })
 
   it('prohibits other wallets but the owner to initialize the staking contract', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    const {
+      contract,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
     await expect(
       init({
         contract,
         wallet: otherWallet,
-        liquidityTokenContract,
-        tokenContract
+        tokenContract,
+        liquidityTokenContract
       })
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Ownable: caller is not the owner'
@@ -168,14 +207,20 @@ describe('DePayLiquidityStaking', () => {
   })
 
   it('it prohibits the owner to init staking if rewards have not been locked in yet', async () => {
-    const {contract, ownerWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    const {
+      contract,
+      ownerWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
     await expect(
       init({
         contract,
         wallet: ownerWallet,
-        liquidityTokenContract,
         tokenContract,
-        totalStakingRewards: defaultTotalStakingRewards
+        liquidityTokenContract,
+        rewardsAmount: '900000000000000000000000',
+        rewardsBalance: '0'
       })
     ).to.be.revertedWith(
       'Not enough tokens deposited for rewards!'
@@ -183,90 +228,110 @@ describe('DePayLiquidityStaking', () => {
   })
 
   it('prohibits to initialize the staking contract again, when its already started', async () => {
-    const {contract, ownerWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({
-      contract, 
-      wallet: ownerWallet,
-      liquidityTokenContract,
+    const {
+      contract,
+      ownerWallet,
       tokenContract,
-      totalStakingRewards: defaultTotalStakingRewards,
-      stakingContractTokenBalance: defaultTotalStakingRewards
-    })
-    await expect(
-      init({
-        contract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    async function _init() {
+      await init({
+        contract, 
         wallet: ownerWallet,
-        liquidityTokenContract,
         tokenContract,
-        totalStakingRewards: defaultTotalStakingRewards,
-        stakingContractTokenBalance: defaultTotalStakingRewards
+        liquidityTokenContract,
+        rewardsAmount: '900000000000000000000000',
+        rewardsBalance: '900000000000000000000000'
       })
+    }
+    await _init() // first time
+    await expect(
+      _init() // second time
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking has already started!'
     )
   })
 
   it('allows to stake liquidity when staking started', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
     await init({
       contract, 
       wallet: ownerWallet,
-      liquidityTokenContract,
       tokenContract,
-      totalStakingRewards: defaultTotalStakingRewards,
-      stakingContractTokenBalance: defaultTotalStakingRewards
+      liquidityTokenContract,
+      percentageYield: '100',
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000'
     })
-    const stakedLiquidityTokenAmount = '2157166313861058934633'
+    const stakedLiquidityTokenAmount = '2000000000000000000000'
     await stake({
       contract,
+      tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
       stakedLiquidityTokenAmount,
-      pairReserve0: '99425305856642687813605',
-      pairReserve1: '206306594448178253923',
-      totalSupply: '4314332627722117869266'
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
-    expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('450000000000000000000000')
+    expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('50000000000000000000000')
     expect(await contract.stakedLiquidityTokenPerAddress(otherWallet.address)).to.eq(stakedLiquidityTokenAmount)
-    expect(await contract.allocatedStakingRewards()).to.eq('450000000000000000000000')
+    expect(await contract.allocatedStakingRewards()).to.eq('50000000000000000000000')
   })
 
   it('pays less rewards when setup with lower yield reward', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract,
+      tokenContract
+    } = await loadFixture(fixture)
     await init({
       contract,
       wallet: ownerWallet,
-      liquidityTokenContract,
       tokenContract,
-      totalStakingRewards: defaultTotalStakingRewards,
-      stakingContractTokenBalance: defaultTotalStakingRewards,
-      yieldRewards: '80'
+      liquidityTokenContract,
+      percentageYield: '80',
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000'
     })
-    const stakedLiquidityTokenAmount = '2157166313861058934633'
+    const stakedLiquidityTokenAmount = '2000000000000000000000'
     await stake({
       contract,
+      tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
       stakedLiquidityTokenAmount,
-      pairReserve0: '99425305856642687813605',
-      pairReserve1: '206306594448178253923',
-      totalSupply: '4314332627722117869266'
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
-    expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('360000000000000000000000')
+    expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('40000000000000000000000')
     expect(await contract.stakedLiquidityTokenPerAddress(otherWallet.address)).to.eq(stakedLiquidityTokenAmount)
-    expect(await contract.allocatedStakingRewards()).to.eq('360000000000000000000000')
+    expect(await contract.allocatedStakingRewards()).to.eq('40000000000000000000000')
   })
 
   it('prohibits to stake liquidity when staking did not start yet', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract,
+      tokenContract
+    } = await loadFixture(fixture)
     await init({
       contract,
       wallet: ownerWallet,
-      liquidityTokenContract,
       tokenContract,
-      totalStakingRewards: defaultTotalStakingRewards,
-      stakingContractTokenBalance: defaultTotalStakingRewards,
-      startTime: defaultStartTime + 86400
+      liquidityTokenContract,
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000',
+      startTime: now() + 86400
     })
     await expect(contract.connect(otherWallet).stake('2157166313861058934633')).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking has not yet started!'
@@ -274,49 +339,130 @@ describe('DePayLiquidityStaking', () => {
   })
 
   it('fails when trying to stake more than rewards left', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    await init({
+    const {
       contract,
-      wallet: ownerWallet,
+      ownerWallet,
+      otherWallet,
       liquidityTokenContract,
+      tokenContract
+    } = await loadFixture(fixture)
+    await init({
+      contract, 
+      wallet: ownerWallet,
       tokenContract,
-      totalStakingRewards: defaultTotalStakingRewards,
-      stakingContractTokenBalance: defaultTotalStakingRewards
+      liquidityTokenContract,
+      percentageYield: '100',
+      rewardsAmount: '100000000000000000000000',
+      rewardsBalance: '100000000000000000000000'
     })
-    const stakedLiquidityTokenAmount = '2157166313861058934633'
+    const stakedLiquidityTokenAmount = '2000000000000000000000'
     await stake({
       contract,
+      tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
       stakedLiquidityTokenAmount,
-      pairReserve0: '99425305856642687813605',
-      pairReserve1: '206306594448178253923',
-      totalSupply: '4314332627722117869266'
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
     await expect(
       stake({
         contract,
+        tokenContractAddress: tokenContract.address,
+        liquidityTokenContract,
+        wallet: otherWallet,
+        stakedLiquidityTokenAmount: '3000000000000000000000',
+        pairReserve0: '100000000000000000000000',
+        totalSupply: '4000000000000000000000'
+        })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert Staking overflows rewards!'
+    )
+    expect(await contract.allocatedStakingRewards()).to.eq('50000000000000000000000')
+  })
+
+  it('fails when the reward token does not equal the first token in the liquidty pair used to calculate rewards', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      percentageYield: '100',
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000'
+    })
+    const stakedLiquidityTokenAmount = '2000000000000000000000'
+    await expect(
+      stake({
+        contract,
+        tokenContractAddress: ownerWallet.address,
+        liquidityTokenContract,
+        wallet: otherWallet,
+        stakedLiquidityTokenAmount,
+        pairReserve0: '100000000000000000000000',
+        totalSupply: '4000000000000000000000'
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert Rewards must be calculated based on the reward token reserve!'
+    )
+    expect(await contract.allocatedStakingRewards()).to.eq('0')
+  })
+
+  it('fails when trying to stake after staking has been closed', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    await init({
+      contract,
+      wallet: ownerWallet,
+      liquidityTokenContract,
+      tokenContract,
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000',
+      closeTime: now()
+    })
+    const stakedLiquidityTokenAmount = '2157166313861058934633'
+    await expect(
+      stake({
+        contract,
+        tokenContractAddress: tokenContract.address,
         liquidityTokenContract,
         wallet: otherWallet,
         stakedLiquidityTokenAmount: '2157166313861058934634',
         pairReserve0: '99425305856642687813605',
-        pairReserve1: '206306594448178253923',
         totalSupply: '4314332627722117869266'
       })
     ).to.be.revertedWith(
-      'VM Exception while processing transaction: revert Staking overflows rewards!'
+      'VM Exception while processing transaction: revert Staking has been closed!'
     )
-    expect(await contract.allocatedStakingRewards()).to.eq('450000000000000000000000')
   })
 
-  it('allows to withdraw tokens which ended up in the contract accidentally', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
+  it('allows contract owner to withdraw tokens which ended up in the contract accidentally', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
     await init({
       contract, 
       wallet: ownerWallet,
-      liquidityTokenContract,
       tokenContract,
-      stakingContractTokenBalance: defaultTotalStakingRewards
+      liquidityTokenContract,
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000'
     })
     const amount = '1000000000000000000'
     const anotherTokenContract = await deployContract(otherWallet, Token)
@@ -333,21 +479,236 @@ describe('DePayLiquidityStaking', () => {
     ).to.eq(amount)
   })
 
-  it('allows to withdraw ETH which ended up in the contract accidentally', async () => {
-    const {contract, ownerWallet, otherWallet, liquidityTokenContract, tokenContract} = await loadFixture(fixture)
-    let balance = await ownerWallet.getBalance()
-    console.log(balance.toString());
-  })
-
   it('does NOT allow to withdraw liquidity tokens, as they belong to the stakers', async () => {
-    // pending
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000'
+    })
+    const amount = '1000000000000000000'
+    await expect(
+      withdraw({
+        contract,
+        wallet: ownerWallet,
+        token: liquidityTokenContract.address,
+        amount: amount
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert Not allowed to withdrawal liquidity tokens!'
+    )
   })
 
   it('does allow to withdraw reward tokens if they have NOT been allocated to stakers yet', async () => {
-    // pending
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    const tokenContract = await deployContract(otherWallet, Token)
+    const amount = '1000000000000000000'
+    await tokenContract.transfer(contract.address, amount)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      rewardsAmount: amount
+    })
+    await expect(() => 
+      withdraw({
+        contract,
+        wallet: ownerWallet,
+        token: tokenContract.address,
+        amount: amount
+      })
+    ).to.changeTokenBalance(tokenContract, ownerWallet, amount)
   })
 
   it('does NOT allow to withdraw reward tokens if they have been allocated to stakers', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    const tokenContract = await deployContract(otherWallet, Token)
+    const amount = '1000000000000000000'
+    await tokenContract.transfer(contract.address, amount)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      rewardsAmount: amount
+    })
+    await stake({
+      contract,
+      tokenContractAddress: tokenContract.address,
+      liquidityTokenContract,
+      wallet: otherWallet,
+      stakedLiquidityTokenAmount: '2157166313861058934633',
+      pairReserve0: '994253058566426878',
+      totalSupply: '4314332627722117869266'
+    })
+    await expect(
+      withdraw({
+        contract,
+        wallet: ownerWallet,
+        token: tokenContract.address,
+        amount: amount
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert Only unallocated staking rewards are allowed to be withdrawn for roll-over to next staking contract!'
+    )
+  })
+
+  it('does NOT allow other wallets to withdraw anything', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    const tokenContract = await deployContract(otherWallet, Token)
+    const amount = '1000000000000000000'
+    await tokenContract.transfer(contract.address, amount)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      rewardsAmount: amount
+    })
+    await expect(
+      withdraw({
+        contract,
+        wallet: otherWallet,
+        token: tokenContract.address,
+        amount: amount
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert Ownable: caller is not the owner'
+    )
+  })
+
+  it('does allow to unstake if rewards are releasable', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet
+    } = await loadFixture(fixture)
+    let rewardsAmount = '900000000000000000000000'
+    const stakedLiquidityTokenAmount = '2000000000000000000000'
+    const tokenContract = await deployContract(ownerWallet, Token)
+    await tokenContract.transfer(contract.address, rewardsAmount)
+    const totalLiquidityTokenSupply = '4000000000000000000000';
+    const pairReserve0 = '100000000000000000000000';
+    const liquidityTokenContract = await deployContract(
+      ownerWallet,
+      UniswapV2Pair,
+      [ // constructor
+        totalLiquidityTokenSupply,
+        tokenContract.address,
+        pairReserve0,
+        '100000000000000000000000' // pairReserve 1
+      ]
+    )
+    await liquidityTokenContract.transfer(otherWallet.address, stakedLiquidityTokenAmount)
+    await liquidityTokenContract.connect(otherWallet).approve(contract.address, stakedLiquidityTokenAmount)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      percentageYield: '100',
+      closeTime: now()+300,
+      releaseTime: now()+400
+    })
+    await stake({
+      contract,
+      tokenContractAddress: tokenContract.address,
+      liquidityTokenContract,
+      wallet: otherWallet,
+      stakedLiquidityTokenAmount
+    })
+    expect(await contract.allocatedStakingRewards()).to.eq('50000000000000000000000')
+    let timestamp = now()+500;
+    console.log('evm_setNextBlockTimestamp', timestamp);
+    await waffle.provider.send('evm_setNextBlockTimestamp', [timestamp])
+    let timestampFromChain = await contract.timestamp();
+    console.log('timestampFromChain', typeof timestampFromChain);
+    console.log('timestampFromChain', timestampFromChain.value.toString());
+    await expect(() => 
+      expect(() => 
+        unstake({
+          contract,
+          wallet: otherWallet 
+        })
+      ).to.changeTokenBalance(tokenContract, otherWallet, '50000000000000000000000')
+    ).to.changeTokenBalance(liquidityTokenContract, otherWallet, stakedLiquidityTokenAmount)
+    expect(await contract.allocatedStakingRewards()).to.eq('0')
+  })
+
+  it('does not allow to unstake if rewards are not relesable yet', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      tokenContract,
+      liquidityTokenContract
+    } = await loadFixture(fixture)
+    await init({
+      contract, 
+      wallet: ownerWallet,
+      tokenContract,
+      liquidityTokenContract,
+      percentageYield: '100',
+      rewardsAmount: '900000000000000000000000',
+      rewardsBalance: '900000000000000000000000',
+      closeTime: now()+300,
+      releaseTime: now()+400
+    })
+    const stakedLiquidityTokenAmount = '2000000000000000000000'
+    await stake({
+      contract,
+      tokenContractAddress: tokenContract.address,
+      liquidityTokenContract,
+      wallet: otherWallet,
+      stakedLiquidityTokenAmount,
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
+    })
+    await expect(
+      unstake({
+        contract,
+        wallet: otherWallet 
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert Staking is not releasable yet!'
+    )
+    expect(await contract.allocatedStakingRewards()).to.eq('50000000000000000000000')
+  })
+
+  it('allows to unstake early to migrate to uniswap v3', async () => {
+    // pending
+  })
+
+  it('does not allow to unstake early to migrate to uniswap v3 if not enabled by the owner', async () => {
+    // pending
+  })
+
+  it('fails staking when depositing liquidity token fails', async () => {
     // pending
   })
 
