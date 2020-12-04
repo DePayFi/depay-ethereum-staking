@@ -152,7 +152,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     IERC20(tokenAddress).transfer(payableOwner(), amount);
   }
 
-  function getTimestamp() external returns(uint256) {
+  function getTimestamp() external view returns(uint256) {
     return block.timestamp;
   }
 

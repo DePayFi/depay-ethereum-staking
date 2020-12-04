@@ -30,7 +30,6 @@
     "@types/mocha": "^5.2.7",
     "chai": "^4.2.0",
     "ethereum-waffle": "^3.2.1",
-    "ethereumjs-util": "^6.2.0",
     "ethers": "^5.0.23",
     "hardhat": "^2.0.4",
     "hardhat-typechain": "^0.3.3",
@@ -49,12 +48,12 @@
     "lint:fix": "yarn prettier ./test/*.ts --write",
     "clean": "rimraf ./build/",
     "precompile": "yarn clean",
-    "compile": "waffle",
+    "compile": "npx hardhat compile",
     "pretest": "yarn compile",
-    "test": "mocha",
+    "test": "npx hardhat test",
     "prepublishOnly": "yarn test",
-    "build": "waffle",
-    "flatten": "npx waffle flatten"
+    "build": "npx hardhat compile",
+    "flatten": "waffle flatten"
   },
   "license": "MIT"
 }
