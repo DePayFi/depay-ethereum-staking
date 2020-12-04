@@ -125,7 +125,6 @@ interface IDePayLiquidityStaking {
       uint256 _closeTime,
       uint256 _releaseTime,
       uint256 _percentageYield,
-      uint256 _rewardsAmount,
       address _liquidityToken,
       address _token
   ) external;

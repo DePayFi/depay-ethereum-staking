@@ -48,7 +48,6 @@ describe('DePayLiquidityStaking', () => {
     tokenContract: Contract,
     rewardsBalance?: string,
     percentageYield?: string,
-    rewardsAmount?: string,
     startTime?: number,
     closeTime?: number,
     releaseTime?: number
@@ -61,7 +60,6 @@ describe('DePayLiquidityStaking', () => {
     tokenContract,
     rewardsBalance = '0',
     percentageYield = '100', // for 100%
-    rewardsAmount = '900000000000000000000000', // 900,000 DEPAY
     startTime = now() - 10,
     closeTime = now() + 2610000, // + 1 month
     releaseTime = now() + 31536000 // + 12 month
@@ -74,7 +72,6 @@ describe('DePayLiquidityStaking', () => {
       closeTime,
       releaseTime,
       percentageYield,
-      rewardsAmount,
       liquidityTokenContract.address,
       tokenContract.address
     )
@@ -82,8 +79,7 @@ describe('DePayLiquidityStaking', () => {
       startTime,
       closeTime,
       releaseTime,
-      percentageYield,
-      rewardsAmount
+      percentageYield
     }
   }
 
@@ -218,19 +214,18 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       tokenContract
     } = await loadFixture(fixture)
+    let rewardsAmount = '900000000000000000000000'
     const {
       startTime,
       closeTime,
       releaseTime,
       percentageYield,
-      rewardsAmount
     } = await init({
       contract,
       wallet: ownerWallet,
       liquidityTokenContract,
       tokenContract,
-      rewardsAmount: '900000000000000000000000',
-      rewardsBalance: '900000000000000000000000'
+      rewardsBalance: rewardsAmount
     })
     expect(await contract.startTime()).to.eq(startTime)
     expect(await contract.closeTime()).to.eq(closeTime)
@@ -260,27 +255,6 @@ describe('DePayLiquidityStaking', () => {
     )
   })
 
-  it('it prohibits the owner to init staking if rewards have not been locked in yet', async () => {
-    const {
-      contract,
-      ownerWallet,
-      tokenContract,
-      liquidityTokenContract
-    } = await loadFixture(fixture)
-    await expect(
-      init({
-        contract,
-        wallet: ownerWallet,
-        tokenContract,
-        liquidityTokenContract,
-        rewardsAmount: '900000000000000000000000',
-        rewardsBalance: '0'
-      })
-    ).to.be.revertedWith(
-      'Not enough tokens deposited for rewards!'
-    )
-  })
-
   it('prohibits to initialize the staking contract again, when its already started', async () => {
     const {
       contract,
@@ -294,7 +268,6 @@ describe('DePayLiquidityStaking', () => {
         wallet: ownerWallet,
         tokenContract,
         liquidityTokenContract,
-        rewardsAmount: '900000000000000000000000',
         rewardsBalance: '900000000000000000000000'
       })
     }
@@ -320,7 +293,6 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '100',
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
@@ -352,7 +324,6 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '80',
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
@@ -383,7 +354,6 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000',
       startTime: now() + 86400
     })
@@ -406,7 +376,6 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '100',
-      rewardsAmount: '100000000000000000000000',
       rewardsBalance: '100000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
@@ -449,7 +418,6 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '100',
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
@@ -482,7 +450,6 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       liquidityTokenContract,
       tokenContract,
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000',
       closeTime: now()
     })
@@ -515,7 +482,6 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000'
     })
     const amount = '1000000000000000000'
@@ -546,7 +512,6 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000'
     })
     const amount = '1000000000000000000'
@@ -577,7 +542,7 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsAmount: amount
+      rewardsBalance: amount
     })
     await expect(() => 
       withdraw({
@@ -587,6 +552,7 @@ describe('DePayLiquidityStaking', () => {
         amount: amount
       })
     ).to.changeTokenBalance(tokenContract, ownerWallet, amount)
+    expect(await contract.rewardsAmount()).to.eq('0')
   })
 
   it('does NOT allow to withdraw reward tokens if they have been allocated to stakers', async () => {
@@ -604,7 +570,7 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsAmount: amount
+      rewardsBalance: amount
     })
     await stake({
       contract,
@@ -642,7 +608,7 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsAmount: amount
+      rewardsBalance: amount
     })
     await expect(
       withdraw({
@@ -720,7 +686,6 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '100',
-      rewardsAmount: '900000000000000000000000',
       rewardsBalance: '900000000000000000000000',
       closeTime: now()+300,
       releaseTime: now()+400

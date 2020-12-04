@@ -125,7 +125,6 @@ interface IDePayLiquidityStaking {
       uint256 _closeTime,
       uint256 _releaseTime,
       uint256 _percentageYield,
-      uint256 _rewardsAmount,
       address _liquidityToken,
       address _token
   ) external;
@@ -559,7 +558,6 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       uint256 _closeTime,
       uint256 _releaseTime,
       uint256 _percentageYield,
-      uint256 _rewardsAmount,
       address _liquidityToken,
       address _token
   ) override external onlyOwner onlyUnstarted {
@@ -567,10 +565,9 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     closeTime = _closeTime;
     releaseTime = _releaseTime;
     percentageYield = _percentageYield;
-    rewardsAmount = _rewardsAmount;
     liquidityToken = IUniswapV2Pair(_liquidityToken);
     token = IERC20(_token);
-    require(token.balanceOf(address(this)) >= rewardsAmount, 'Not enough tokens deposited for rewards!');
+    rewardsAmount = token.balanceOf(address(this));
   }
 
   function stake(
@@ -619,6 +616,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
         allocatedStakingRewards <= token.balanceOf(address(this)).sub(amount),
         'Only unallocated staking rewards are allowed to be withdrawn for roll-over to next staking contract!'
       );
+      rewardsAmount = rewardsAmount.sub(amount);
     }
 
     IERC20(tokenAddress).transfer(payableOwner(), amount);
