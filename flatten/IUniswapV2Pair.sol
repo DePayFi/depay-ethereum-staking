@@ -1,4 +1,4 @@
-// Root file: src/interfaces/IUniswapV2Pair.sol
+// Root file: contracts/interfaces/IUniswapV2Pair.sol
 
 // SPDX-License-Identifier: MIT
 

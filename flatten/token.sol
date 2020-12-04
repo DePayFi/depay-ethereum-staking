@@ -577,7 +577,7 @@ contract ERC20 is Context, IERC20 {
 }
 
 
-// Root file: src/token.sol
+// Root file: contracts/token.sol
 
 
 pragma solidity >= 0.7.5;

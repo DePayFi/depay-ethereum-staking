@@ -88,7 +88,6 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       address _liquidityToken,
       address _token
   ) override external onlyOwner onlyUnstarted {
-    
     startTime = _startTime;
     closeTime = _closeTime;
     releaseTime = _releaseTime;
@@ -102,7 +101,6 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   function stake(
     uint256 stakedLiquidityTokenAmount
   ) override external onlyStarted onlyUnclosed nonReentrant {
-
     require(
       liquidityToken.transferFrom(msg.sender, address(this), stakedLiquidityTokenAmount),
       'Depositing liquidity token failed!'
@@ -139,7 +137,6 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     address tokenAddress,
     uint amount
   ) override external onlyOwner nonReentrant {
-    
     require(tokenAddress != address(liquidityToken), 'Not allowed to withdrawal liquidity tokens!');
     
     if(tokenAddress == address(token)) {
@@ -152,26 +149,28 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     IERC20(tokenAddress).transfer(payableOwner(), amount);
   }
 
-  function getTimestamp() external view returns(uint256) {
-    return block.timestamp;
-  }
-
-  function unstake() override external onlyReleasable nonReentrant {
+  function _unstakeLiquidity() private {
     uint256 liquidityTokenAmount = stakedLiquidityTokenPerAddress[msg.sender];
     stakedLiquidityTokenPerAddress[msg.sender] = 0;
-    uint256 rewards = rewardsPerAddress[msg.sender];
-    allocatedStakingRewards = allocatedStakingRewards.sub(rewards);
-    rewardsPerAddress[msg.sender] = 0;
-
     require(
       liquidityToken.transfer(msg.sender, liquidityTokenAmount),
       'Unstaking liquidity token failed!'
     );
+  }
 
+  function _unstakeRewards() private {
+    uint256 rewards = rewardsPerAddress[msg.sender];
+    allocatedStakingRewards = allocatedStakingRewards.sub(rewards);
+    rewardsPerAddress[msg.sender] = 0;
     require(
       token.transfer(msg.sender, rewards),
       'Unstaking rewards failed!'
     );
+  }
+
+  function unstake() override external onlyReleasable nonReentrant {
+    _unstakeLiquidity();
+    _unstakeRewards();
   }
 
   function enableUnstakeEarly() override external onlyOwner {
@@ -179,6 +178,9 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   }
 
   function unstakeEarly() override external onlyUnstakeEarly nonReentrant {
-
+    _unstakeLiquidity();
+    uint256 rewards = rewardsPerAddress[msg.sender];
+    allocatedStakingRewards = allocatedStakingRewards.sub(rewards);
+    rewardsPerAddress[msg.sender] = 0;
   }
 }

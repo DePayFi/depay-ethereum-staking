@@ -577,7 +577,7 @@ contract ERC20 is Context, IERC20 {
 }
 
 
-// Root file: src/uniswap_v2_pair.sol
+// Root file: contracts/uniswap_v2_pair.sol
 
 
 pragma solidity >= 0.7.5;

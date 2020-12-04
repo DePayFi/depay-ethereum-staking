@@ -79,7 +79,7 @@ interface IERC20 {
 }
 
 
-// Dependency file: src/interfaces/IUniswapV2Pair.sol
+// Dependency file: contracts/interfaces/IUniswapV2Pair.sol
 
 
 // pragma solidity >= 0.7.5;
@@ -95,13 +95,13 @@ interface IUniswapV2Pair {
 }
 
 
-// Root file: src/interfaces/IDePayLiquidityStaking.sol
+// Root file: contracts/interfaces/IDePayLiquidityStaking.sol
 
 
 pragma solidity >= 0.7.5;
 
 // import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// import 'src/interfaces/IUniswapV2Pair.sol';
+// import 'contracts/interfaces/IUniswapV2Pair.sol';
 
 interface IDePayLiquidityStaking {
   
