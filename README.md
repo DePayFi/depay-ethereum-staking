@@ -3,7 +3,7 @@ Mainnet:
 Ropsten: 
 - https://ropsten.etherscan.io/address/0xbf54a5ec9641ac917956e8bd516eb47e5becf43f
 - https://ropsten.etherscan.io/address/0x35aa7c8b18ee1f73e11453d9d39120fcbea1e445
--
+- https://ropsten.etherscan.io/address/0x029a9917d489ee0aba92e2353822c4cbd63f6bbe
 
 ## Quick Start
 
