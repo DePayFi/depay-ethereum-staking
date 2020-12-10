@@ -79,7 +79,7 @@ It could be happened in the same way of fake deposit attack where your `call()` 
       rewardsAmount = rewardsAmount.sub(amount);
     }
 
-    require(IERC20(tokenAddress).safeTransfer(payableOwner(), amount), 'Unable to do transaction');
+    IERC20(tokenAddress).safeTransfer(payableOwner(), amount);
   }
 ```
 

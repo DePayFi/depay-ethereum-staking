@@ -6,6 +6,7 @@ import './interfaces/IDePayLiquidityStaking.sol';
 import './interfaces/IUniswapV2Pair.sol';
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -13,6 +14,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGuard {
   
   using SafeMath for uint256;
+  using SafeERC20 for IERC20;
 
   // Epoch time when staking starts: People are allowed to stake
   uint256 public override startTime;
@@ -145,7 +147,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       rewardsAmount = rewardsAmount.sub(amount);
     }
 
-    IERC20(tokenAddress).transfer(payableOwner(), amount);
+    IERC20(tokenAddress).safeTransfer(payableOwner(), amount);
   }
 
   function _unstakeLiquidity() private {
