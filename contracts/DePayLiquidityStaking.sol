@@ -185,8 +185,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
 
   function unstakeEarly() override external onlyUnstakeEarly nonReentrant {
     _unstakeLiquidity();
-    uint256 rewards = rewardsPerAddress[msg.sender];
-    allocatedStakingRewards = allocatedStakingRewards.sub(rewards);
+    allocatedStakingRewards = allocatedStakingRewards.sub(rewardsPerAddress[msg.sender]);
     rewardsPerAddress[msg.sender] = 0;
   }
 
