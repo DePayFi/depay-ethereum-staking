@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >= 0.7.5;
+pragma solidity >=0.7.5 <0.8.0;
 
 import './interfaces/IDePayLiquidityStaking.sol';
 import './interfaces/IUniswapV2Pair.sol';
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -13,6 +14,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGuard {
   
   using SafeMath for uint256;
+  using SafeERC20 for IERC20;
 
   // Epoch time when staking starts: People are allowed to stake
   uint256 public override startTime;
@@ -48,9 +50,6 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   // Stores all amounts of staked liquidity tokens per address
   mapping (address => uint256) public override stakedLiquidityTokenPerAddress;
 
-  // Address ZERO
-  address private ZERO = 0x0000000000000000000000000000000000000000;
-
   modifier onlyUnstarted() {
     require(
       startTime == 0 || block.timestamp < startTime,
@@ -79,6 +78,11 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     _;
   }
 
+  modifier onlyDistributedRewards(){
+    require(allocatedStakingRewards == 0, 'Rewards were not distributed yet!');
+    _;
+  }
+
   function init(
       uint256 _startTime,
       uint256 _closeTime,
@@ -87,6 +91,9 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       address _liquidityToken,
       address _token
   ) override external onlyOwner onlyUnstarted {
+    require(isContract(_token), '_token address needs to be a contract!');
+    require(isContract(_liquidityToken), '_liquidityToken address needs to be a contract!');
+    require(_startTime < _closeTime && _closeTime < _releaseTime, '_startTime needs to be before _closeTime needs to be before _releaseTime!');
     startTime = _startTime;
     closeTime = _closeTime;
     releaseTime = _releaseTime;
@@ -128,7 +135,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   }
 
   function payableOwner() view private returns(address payable) {
-    return address(uint160(owner()));
+    return payable(owner());
   }
     
   function withdraw(
@@ -145,7 +152,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       rewardsAmount = rewardsAmount.sub(amount);
     }
 
-    IERC20(tokenAddress).transfer(payableOwner(), amount);
+    IERC20(tokenAddress).safeTransfer(payableOwner(), amount);
   }
 
   function _unstakeLiquidity() private {
@@ -178,8 +185,22 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
 
   function unstakeEarly() override external onlyUnstakeEarly nonReentrant {
     _unstakeLiquidity();
-    uint256 rewards = rewardsPerAddress[msg.sender];
-    allocatedStakingRewards = allocatedStakingRewards.sub(rewards);
+    allocatedStakingRewards = allocatedStakingRewards.sub(rewardsPerAddress[msg.sender]);
     rewardsPerAddress[msg.sender] = 0;
+  }
+
+  function isContract(address account) internal view returns (bool) {
+    // According to EIP-1052, 0x0 is the value returned for not-yet created accounts
+    // and 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470 is returned
+    // for accounts without code, i.e. `keccak256('')`
+    bytes32 codehash;
+    bytes32 accountHash = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
+    // solhint-disable-next-line no-inline-assembly
+    assembly { codehash := extcodehash(account) }
+    return (codehash != accountHash && codehash != 0x0);
+  }
+
+  function destroy() public onlyOwner onlyDistributedRewards {
+    selfdestruct(payable(owner()));
   }
 }
