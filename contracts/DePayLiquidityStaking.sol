@@ -50,9 +50,6 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   // Stores all amounts of staked liquidity tokens per address
   mapping (address => uint256) public override stakedLiquidityTokenPerAddress;
 
-  // Address ZERO
-  address private ZERO = 0x0000000000000000000000000000000000000000;
-
   modifier onlyUnstarted() {
     require(
       startTime == 0 || block.timestamp < startTime,
