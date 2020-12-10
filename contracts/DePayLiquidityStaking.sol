@@ -81,6 +81,11 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     _;
   }
 
+  modifier onlyDistributedRewards(){
+    require(allocatedStakingRewards == 0, 'Rewards were not distributed yet!');
+    _;
+  }
+
   function init(
       uint256 _startTime,
       uint256 _closeTime,
@@ -91,6 +96,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   ) override external onlyOwner onlyUnstarted {
     require(isContract(_token), '_token address needs to be a contract!');
     require(isContract(_liquidityToken), '_liquidityToken address needs to be a contract!');
+    require(_startTime < _closeTime && _closeTime < _releaseTime, '_startTime needs to be before _closeTime needs to be before _releaseTime!');
     startTime = _startTime;
     closeTime = _closeTime;
     releaseTime = _releaseTime;
@@ -196,5 +202,9 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     // solhint-disable-next-line no-inline-assembly
     assembly { codehash := extcodehash(account) }
     return (codehash != accountHash && codehash != 0x0);
+  }
+
+  function destroy() public onlyOwner onlyDistributedRewards {
+    selfdestruct(payable(owner()));
   }
 }
