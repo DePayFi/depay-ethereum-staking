@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >= 0.7.5;
+pragma solidity >=0.7.5 <0.8.0;
 
 import './interfaces/IDePayLiquidityStaking.sol';
 import './interfaces/IUniswapV2Pair.sol';
