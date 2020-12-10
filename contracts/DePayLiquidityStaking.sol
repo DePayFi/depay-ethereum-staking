@@ -90,7 +90,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       uint256 _percentageYield,
       address _liquidityToken,
       address _token
-  ) override external onlyOwner onlyUnstarted {
+  ) override external onlyOwner onlyUnstarted returns(bool) {
     require(isContract(_token), '_token address needs to be a contract!');
     require(isContract(_liquidityToken), '_liquidityToken address needs to be a contract!');
     require(_startTime < _closeTime && _closeTime < _releaseTime, '_startTime needs to be before _closeTime needs to be before _releaseTime!');
@@ -101,11 +101,12 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     liquidityToken = IUniswapV2Pair(_liquidityToken);
     token = IERC20(_token);
     rewardsAmount = token.balanceOf(address(this));
+    return true;
   }
 
   function stake(
     uint256 stakedLiquidityTokenAmount
-  ) override external onlyStarted onlyUnclosed nonReentrant {
+  ) override external onlyStarted onlyUnclosed nonReentrant returns(uint256) {
     require(
       liquidityToken.transferFrom(msg.sender, address(this), stakedLiquidityTokenAmount),
       'Depositing liquidity token failed!'
@@ -132,10 +133,12 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
 
     allocatedStakingRewards = allocatedStakingRewards.add(rewards);
     require(allocatedStakingRewards <= rewardsAmount, 'Staking overflows rewards!');
+
+    return rewards;
   }
 
   function payableOwner() view private returns(address payable) {
-    return address(uint160(owner()));
+    return payable(owner());
   }
     
   function withdraw(
