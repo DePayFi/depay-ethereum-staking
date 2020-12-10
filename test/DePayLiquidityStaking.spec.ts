@@ -45,8 +45,10 @@ describe('DePayLiquidityStaking', () => {
   interface initParameters {
     contract: Contract,
     wallet: Wallet,
-    liquidityTokenContract: Contract,
-    tokenContract: Contract,
+    liquidityTokenContract?: Contract,
+    liquidityTokenContractAddress?: string,
+    tokenContract?: Contract,
+    tokenContractAddress?: string,
     rewardsBalance?: string,
     percentageYield?: string,
     startTime?: number,
@@ -58,14 +60,18 @@ describe('DePayLiquidityStaking', () => {
     contract,
     wallet,
     liquidityTokenContract,
+    liquidityTokenContractAddress,
     tokenContract,
+    tokenContractAddress,
     rewardsBalance = '0',
     percentageYield = '100', // for 100%
     startTime = now() - 10,
     closeTime = now() + 2610000, // + 1 month
     releaseTime = now() + 31536000 // + 12 month
   }: initParameters) {
-    if(tokenContract.mock) {
+    if(liquidityTokenContract) { liquidityTokenContractAddress = liquidityTokenContract.address }
+    if(tokenContract) { tokenContractAddress = tokenContract.address }
+    if(tokenContract && tokenContract.mock) {
       await tokenContract.mock.balanceOf.returns(rewardsBalance)
     }
     await contract.connect(wallet).init(
@@ -73,8 +79,8 @@ describe('DePayLiquidityStaking', () => {
       closeTime,
       releaseTime,
       percentageYield,
-      liquidityTokenContract.address,
-      tokenContract.address
+      liquidityTokenContractAddress,
+      tokenContractAddress
     )
     return {
       startTime,
@@ -235,6 +241,48 @@ describe('DePayLiquidityStaking', () => {
     expect(await contract.rewardsAmount()).to.eq(rewardsAmount)
     expect(await contract.liquidityToken()).to.eq(liquidityTokenContract.address)
     expect(await contract.token()).to.eq(tokenContract.address)
+  })
+
+  it('fails when initializing with a wallet address as _token address', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract,
+      tokenContract
+    } = await loadFixture(fixture)
+    await expect(
+      init({
+        contract,
+        wallet: ownerWallet,
+        liquidityTokenContract,
+        tokenContractAddress: otherWallet.address,
+        rewardsBalance: '900000000000000000000000'
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert _token address needs to be a contract!'
+    )
+  })
+
+  it('fails when initializing with a wallet address as _liquidityToken address', async () => {
+    const {
+      contract,
+      ownerWallet,
+      otherWallet,
+      liquidityTokenContract,
+      tokenContract
+    } = await loadFixture(fixture)
+    await expect(
+      init({
+        contract,
+        wallet: ownerWallet,
+        tokenContract,
+        liquidityTokenContractAddress: otherWallet.address,
+        rewardsBalance: '900000000000000000000000'
+      })
+    ).to.be.revertedWith(
+      'VM Exception while processing transaction: revert _liquidityToken address needs to be a contract!'
+    )
   })
 
   it('prohibits other wallets but the owner to initialize the staking contract', async () => {
