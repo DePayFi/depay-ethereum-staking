@@ -580,7 +580,7 @@ contract ERC20 is Context, IERC20 {
 // Root file: contracts/token.sol
 
 
-pragma solidity >= 0.7.5;
+pragma solidity >=0.7.5 <0.8.0;
 
 // import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
