@@ -8,11 +8,12 @@ import {
   solidity,
 } from 'ethereum-waffle'
 import IERC20 from '../artifacts/@openzeppelin/contracts/token/ERC20/IERC20.sol/IERC20.json'
-import Token from '../artifacts/contracts/token.sol/Token.json'
-import TokenSafeTransfer from '../artifacts/contracts/token_safe_transfer.sol/TokenSafeTransfer.json'
-import UniswapV2Pair from '../artifacts/contracts/uniswap_v2_pair.sol/UniswapV2Pair.json'
+import Token from '../artifacts/contracts/test/token.sol/Token.json'
+import TokenSafeTransfer from '../artifacts/contracts/test/token_safe_transfer.sol/TokenSafeTransfer.json'
+import UniswapV2Pair from '../artifacts/contracts/test/uniswap_v2_pair.sol/UniswapV2Pair.json'
 import IUniswapV2Pair from '../artifacts/contracts/interfaces/IUniswapV2Pair.sol/IUniswapV2Pair.json'
 import DePayLiquidityStaking from '../artifacts/contracts/DePayLiquidityStaking.sol/DePayLiquidityStaking.json'
+import IDePayLiquidityStaking from '../artifacts/contracts/interfaces/IDePayLiquidityStaking.sol/IDePayLiquidityStaking.json'
 
 const { waffle, ethers } = require("hardhat")
 const {
@@ -50,6 +51,9 @@ describe('DePayLiquidityStaking', () => {
     tokenContract?: Contract,
     tokenContractAddress?: string,
     rewardsBalance?: string,
+    pairReserve0?: string,
+    pairReserve1?: string,
+    totalSupply?: string,
     percentageYield?: string,
     startTime?: number,
     closeTime?: number,
@@ -64,15 +68,23 @@ describe('DePayLiquidityStaking', () => {
     tokenContract,
     tokenContractAddress,
     rewardsBalance = '0',
+    pairReserve0 = '100000000000000000000000',
+    pairReserve1 = '2000000000000000000000',
+    totalSupply = '4000000000000000000000',
     percentageYield = '100', // for 100%
     startTime = now() - 10,
     closeTime = now() + 2610000, // + 1 month
     releaseTime = now() + 31536000 // + 12 month
   }: initParameters) {
-    if(liquidityTokenContract) { liquidityTokenContractAddress = liquidityTokenContract.address }
     if(tokenContract) { tokenContractAddress = tokenContract.address }
     if(tokenContract && tokenContract.mock) {
       await tokenContract.mock.balanceOf.returns(rewardsBalance)
+    }
+    if(liquidityTokenContract) { liquidityTokenContractAddress = liquidityTokenContract.address }
+    if(liquidityTokenContract && liquidityTokenContract.mock) {
+      await liquidityTokenContract.mock.getReserves.returns(pairReserve0, pairReserve1, now())
+      await liquidityTokenContract.mock.totalSupply.returns(totalSupply)
+      await liquidityTokenContract.mock.token0.returns(tokenContractAddress)
     }
     await contract.connect(wallet).init(
       startTime,
@@ -95,10 +107,7 @@ describe('DePayLiquidityStaking', () => {
     tokenContractAddress: string,
     liquidityTokenContract: Contract,
     wallet: Wallet,
-    stakedLiquidityTokenAmount: string,
-    pairReserve0?: string,
-    pairReserve1?: string,
-    totalSupply?: string
+    stakedLiquidityTokenAmount: string
   }
 
   async function stake({
@@ -106,16 +115,10 @@ describe('DePayLiquidityStaking', () => {
     tokenContractAddress,
     liquidityTokenContract,
     wallet,
-    stakedLiquidityTokenAmount,
-    pairReserve0,
-    pairReserve1 = '2000000000000000000000',
-    totalSupply
+    stakedLiquidityTokenAmount
   }: stakeParameters) {
     if(liquidityTokenContract.mock) {
       await liquidityTokenContract.mock.transferFrom.returns(true)
-      await liquidityTokenContract.mock.getReserves.returns(pairReserve0, pairReserve1, now())
-      await liquidityTokenContract.mock.totalSupply.returns(totalSupply)
-      await liquidityTokenContract.mock.token0.returns(tokenContractAddress)
     }
     await contract.connect(wallet).stake(stakedLiquidityTokenAmount)
   }
@@ -218,6 +221,18 @@ describe('DePayLiquidityStaking', () => {
 
   it('deploys contract successfully', async () => {
     await loadFixture(fixture)
+  })
+
+  it('has the same interface as IDePayLiquidityStaking', async () => {
+    const { contract, ownerWallet } = await loadFixture(fixture)
+    const interfaceContract = await deployMockContract(ownerWallet, IDePayLiquidityStaking.abi)
+    let inheritedFragmentNames: string[] = ['OwnershipTransferred', 'transferOwnership', 'owner', 'renounceOwnership']
+    let contractFragmentsWithoutInheritance = contract.interface.fragments.filter((fragment: any)=> inheritedFragmentNames.indexOf(fragment.name) < 0)
+    expect(
+      JSON.stringify(contractFragmentsWithoutInheritance)
+    ).to.eq(
+      JSON.stringify(interfaceContract.interface.fragments)
+    )
   })
 
   it('sets deployer wallet as the contract owner', async () => {
@@ -401,7 +416,9 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '100',
-      rewardsBalance: '900000000000000000000000'
+      rewardsBalance: '900000000000000000000000',
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
     await stake({
@@ -409,9 +426,7 @@ describe('DePayLiquidityStaking', () => {
       tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
-      stakedLiquidityTokenAmount,
-      pairReserve0: '100000000000000000000000',
-      totalSupply: '4000000000000000000000'
+      stakedLiquidityTokenAmount
     })
     expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('50000000000000000000000')
     expect(await contract.stakedLiquidityTokenPerAddress(otherWallet.address)).to.eq(stakedLiquidityTokenAmount)
@@ -432,7 +447,9 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '80',
-      rewardsBalance: '900000000000000000000000'
+      rewardsBalance: '900000000000000000000000',
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
     await stake({
@@ -440,9 +457,7 @@ describe('DePayLiquidityStaking', () => {
       tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
-      stakedLiquidityTokenAmount,
-      pairReserve0: '100000000000000000000000',
-      totalSupply: '4000000000000000000000'
+      stakedLiquidityTokenAmount
     })
     expect(await contract.rewardsPerAddress(otherWallet.address)).to.eq('40000000000000000000000')
     expect(await contract.stakedLiquidityTokenPerAddress(otherWallet.address)).to.eq(stakedLiquidityTokenAmount)
@@ -484,7 +499,9 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract,
       percentageYield: '100',
-      rewardsBalance: '100000000000000000000000'
+      rewardsBalance: '100000000000000000000000',
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
     const stakedLiquidityTokenAmount = '2000000000000000000000'
     await stake({
@@ -492,9 +509,7 @@ describe('DePayLiquidityStaking', () => {
       tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
-      stakedLiquidityTokenAmount,
-      pairReserve0: '100000000000000000000000',
-      totalSupply: '4000000000000000000000'
+      stakedLiquidityTokenAmount
     })
     await expect(
       stake({
@@ -502,10 +517,8 @@ describe('DePayLiquidityStaking', () => {
         tokenContractAddress: tokenContract.address,
         liquidityTokenContract,
         wallet: otherWallet,
-        stakedLiquidityTokenAmount: '3000000000000000000000',
-        pairReserve0: '100000000000000000000000',
-        totalSupply: '4000000000000000000000'
-        })
+        stakedLiquidityTokenAmount: '3000000000000000000000'
+      })
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking overflows rewards!'
     )
@@ -520,29 +533,22 @@ describe('DePayLiquidityStaking', () => {
       tokenContract,
       liquidityTokenContract
     } = await loadFixture(fixture)
-    await init({
-      contract, 
-      wallet: ownerWallet,
-      tokenContract,
-      liquidityTokenContract,
-      percentageYield: '100',
-      rewardsBalance: '900000000000000000000000'
-    })
-    const stakedLiquidityTokenAmount = '2000000000000000000000'
+    await liquidityTokenContract.mock.getReserves.returns('100000000000000000000000', '200000000000000000000000', now())
+    await liquidityTokenContract.mock.totalSupply.returns('4000000000000000000000')
+    await liquidityTokenContract.mock.token0.returns(ownerWallet.address)
     await expect(
-      stake({
-        contract,
-        tokenContractAddress: ownerWallet.address,
-        liquidityTokenContract,
-        wallet: otherWallet,
-        stakedLiquidityTokenAmount,
-        pairReserve0: '100000000000000000000000',
-        totalSupply: '4000000000000000000000'
+      init({
+        contract, 
+        wallet: ownerWallet,
+        tokenContract,
+        percentageYield: '100',
+        rewardsBalance: '900000000000000000000000',
+        tokenContractAddress: tokenContract.address,
+        liquidityTokenContractAddress: liquidityTokenContract.address
       })
     ).to.be.revertedWith(
-      'VM Exception while processing transaction: revert Rewards must be calculated based on the reward token reserve!'
+      'VM Exception while processing transaction: revert Rewards must be calculated based on the reward token address!'
     )
-    expect(await contract.allocatedStakingRewards()).to.eq('0')
   })
 
   it('fails when trying to stake after staking has been closed', async () => {
@@ -559,7 +565,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       tokenContract,
       rewardsBalance: '900000000000000000000000',
-      closeTime: now()
+      closeTime: now(),
+      pairReserve0: '99425305856642687813605',
+      totalSupply: '4314332627722117869266'
     })
     const stakedLiquidityTokenAmount = '2157166313861058934633'
     await expect(
@@ -568,9 +576,7 @@ describe('DePayLiquidityStaking', () => {
         tokenContractAddress: tokenContract.address,
         liquidityTokenContract,
         wallet: otherWallet,
-        stakedLiquidityTokenAmount: '2157166313861058934634',
-        pairReserve0: '99425305856642687813605',
-        totalSupply: '4314332627722117869266'
+        stakedLiquidityTokenAmount: '2157166313861058934634'
       })
     ).to.be.revertedWith(
       'VM Exception while processing transaction: revert Staking has been closed!'
@@ -707,16 +713,16 @@ describe('DePayLiquidityStaking', () => {
       wallet: ownerWallet,
       tokenContract,
       liquidityTokenContract,
-      rewardsBalance: amount
+      rewardsBalance: amount,
+      pairReserve0: '994253058566426878',
+      totalSupply: '4314332627722117869266'
     })
     await stake({
       contract,
       tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
-      stakedLiquidityTokenAmount: '2157166313861058934633',
-      pairReserve0: '994253058566426878',
-      totalSupply: '4314332627722117869266'
+      stakedLiquidityTokenAmount: '2157166313861058934633'
     })
     await expect(
       withdraw({
@@ -785,7 +791,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       percentageYield: '100',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0,
+      totalSupply: totalLiquidityTokenSupply
     })
     await expect(() => 
       stake({
@@ -825,16 +833,16 @@ describe('DePayLiquidityStaking', () => {
       percentageYield: '100',
       rewardsBalance: '900000000000000000000000',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0: '100000000000000000000000',
+      totalSupply: '4000000000000000000000'
     })
     await stake({
       contract,
       tokenContractAddress: tokenContract.address,
       liquidityTokenContract,
       wallet: otherWallet,
-      stakedLiquidityTokenAmount: '2000000000000000000000',
-      pairReserve0: '100000000000000000000000',
-      totalSupply: '4000000000000000000000'
+      stakedLiquidityTokenAmount: '2000000000000000000000'
     })
     await expect(
       unstake({
@@ -903,7 +911,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       percentageYield: '100',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0: pairReserve0,
+      totalSupply: totalLiquidityTokenSupply
     })
     await expect(() => 
       stake({
@@ -957,7 +967,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       percentageYield: '100',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0: pairReserve0,
+      totalSupply: totalLiquidityTokenSupply
     })
     await expect(() => 
       stake({
@@ -1006,7 +1018,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       percentageYield: '100',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0: pairReserve0,
+      totalSupply: totalLiquidityTokenSupply
     })
     await expect(() => 
       stake({
@@ -1053,7 +1067,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       percentageYield: '100',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0: pairReserve0,
+      totalSupply: totalLiquidityTokenSupply
     })
     await expect(() => 
       stake({
@@ -1100,7 +1116,9 @@ describe('DePayLiquidityStaking', () => {
       liquidityTokenContract,
       percentageYield: '100',
       closeTime: now()+300,
-      releaseTime: now()+400
+      releaseTime: now()+400,
+      pairReserve0: pairReserve0,
+      totalSupply: totalLiquidityTokenSupply
     })
     await expect(() => 
       stake({

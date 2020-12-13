@@ -577,8 +577,10 @@ contract ERC20 is Context, IERC20 {
 }
 
 
-// Root file: contracts/token.sol
+// Root file: contracts/test/token.sol
 
+
+// used for running automated hardhat tests
 
 pragma solidity >=0.7.5 <0.8.0;
 
