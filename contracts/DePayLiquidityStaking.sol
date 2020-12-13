@@ -89,7 +89,7 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
       uint256 _percentageYield,
       address _liquidityToken,
       address _token
-  ) external onlyOwner onlyUnstarted {
+  ) external onlyOwner onlyUnstarted returns(bool) {
     require(isContract(_token), '_token address needs to be a contract!');
     require(isContract(_liquidityToken), '_liquidityToken address needs to be a contract!');
     require(_startTime < _closeTime && _closeTime < _releaseTime, '_startTime needs to be before _closeTime needs to be before _releaseTime!');
@@ -100,11 +100,12 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
     liquidityToken = IUniswapV2Pair(_liquidityToken);
     token = IERC20(_token);
     rewardsAmount = token.balanceOf(address(this));
+    return true;
   }
 
   function stake(
     uint256 stakedLiquidityTokenAmount
-  ) external onlyStarted onlyUnclosed nonReentrant {
+  ) external onlyStarted onlyUnclosed nonReentrant returns(bool) {
     require(
       liquidityToken.transferFrom(msg.sender, address(this), stakedLiquidityTokenAmount),
       'Depositing liquidity token failed!'
@@ -131,6 +132,8 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
 
     allocatedStakingRewards = allocatedStakingRewards.add(rewards);
     require(allocatedStakingRewards <= rewardsAmount, 'Staking overflows rewards!');
+
+    return true;
   }
 
   function payableOwner() view private returns(address payable) {
@@ -140,7 +143,7 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
   function withdraw(
     address tokenAddress,
     uint amount
-  ) external onlyOwner nonReentrant {
+  ) external onlyOwner nonReentrant returns(bool) {
     require(tokenAddress != address(liquidityToken), 'Not allowed to withdrawal liquidity tokens!');
     
     if(tokenAddress == address(token)) {
@@ -152,6 +155,7 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
     }
 
     IERC20(tokenAddress).safeTransfer(payableOwner(), amount);
+    return true;
   }
 
   function _unstakeLiquidity() private {
@@ -173,22 +177,25 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
     );
   }
 
-  function unstake() external onlyReleasable nonReentrant {
+  function unstake() external onlyReleasable nonReentrant returns(bool) {
     _unstakeLiquidity();
     _unstakeRewards();
+    return true;
   }
 
-  function enableUnstakeEarly() external onlyOwner {
+  function enableUnstakeEarly() external onlyOwner returns(bool) {
     unstakeEarlyAllowed = true;
+    return true;
   }
 
-  function unstakeEarly() external onlyUnstakeEarly nonReentrant {
+  function unstakeEarly() external onlyUnstakeEarly nonReentrant returns(bool) {
     _unstakeLiquidity();
     allocatedStakingRewards = allocatedStakingRewards.sub(rewardsPerAddress[msg.sender]);
     rewardsPerAddress[msg.sender] = 0;
+    return true;
   }
 
-  function isContract(address account) internal view returns (bool) {
+  function isContract(address account) internal view returns(bool) {
     // According to EIP-1052, 0x0 is the value returned for not-yet created accounts
     // and 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470 is returned
     // for accounts without code, i.e. `keccak256('')`
@@ -199,7 +206,8 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
     return (codehash != accountHash && codehash != 0x0);
   }
 
-  function destroy() public onlyOwner onlyDistributedRewards {
+  function destroy() public onlyOwner onlyDistributedRewards returns(bool) {
     selfdestruct(payable(owner()));
+    return true;
   }
 }

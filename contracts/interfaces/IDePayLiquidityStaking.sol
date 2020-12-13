@@ -29,22 +29,22 @@ interface IDePayLiquidityStaking {
       uint256 _percentageYield,
       address _liquidityToken,
       address _token
-  ) external;
+  ) external returns(bool);
 
   function stake(
     uint256 stakedLiquidityTokenAmount
-  ) external;
+  ) external returns(bool);
 
   function withdraw(
     address tokenAddress,
     uint amount
-  ) external;
+  ) external returns(bool);
 
-  function unstake() external;
+  function unstake() external returns(bool);
 
-  function enableUnstakeEarly() external;
+  function enableUnstakeEarly() external returns(bool);
 
-  function unstakeEarly() external;
+  function unstakeEarly() external returns(bool);
 
-  function destroy() external;
+  function destroy() external returns(bool);
 }
