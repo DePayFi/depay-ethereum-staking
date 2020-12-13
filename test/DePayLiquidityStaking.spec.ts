@@ -221,6 +221,18 @@ describe('DePayLiquidityStaking', () => {
     await loadFixture(fixture)
   })
 
+  it('has the same interface as IDePayLiquidityStaking', async () => {
+    const { contract, ownerWallet } = await loadFixture(fixture)
+    const interfaceContract = await deployMockContract(ownerWallet, IDePayLiquidityStaking.abi)
+    let inheritedFragmentNames: string[] = ['OwnershipTransferred', 'transferOwnership', 'owner', 'renounceOwnership']
+    let contractFragmentsWithoutInheritance = contract.interface.fragments.filter((fragment: any)=> inheritedFragmentNames.indexOf(fragment.name) < 0)
+    expect(
+      JSON.stringify(contractFragmentsWithoutInheritance)
+    ).to.eq(
+      JSON.stringify(interfaceContract.interface.fragments)
+    )
+  })
+
   it('sets deployer wallet as the contract owner', async () => {
     const {contract, ownerWallet} = await loadFixture(fixture)
     const owner = await contract.owner()

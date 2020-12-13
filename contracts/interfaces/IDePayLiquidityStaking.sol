@@ -45,4 +45,6 @@ interface IDePayLiquidityStaking {
   function enableUnstakeEarly() external;
 
   function unstakeEarly() external;
+
+  function destroy() external;
 }
