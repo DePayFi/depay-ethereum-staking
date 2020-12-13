@@ -8,11 +8,12 @@ import {
   solidity,
 } from 'ethereum-waffle'
 import IERC20 from '../artifacts/@openzeppelin/contracts/token/ERC20/IERC20.sol/IERC20.json'
-import Token from '../artifacts/contracts/token.sol/Token.json'
-import TokenSafeTransfer from '../artifacts/contracts/token_safe_transfer.sol/TokenSafeTransfer.json'
-import UniswapV2Pair from '../artifacts/contracts/uniswap_v2_pair.sol/UniswapV2Pair.json'
+import Token from '../artifacts/contracts/test/token.sol/Token.json'
+import TokenSafeTransfer from '../artifacts/contracts/test/token_safe_transfer.sol/TokenSafeTransfer.json'
+import UniswapV2Pair from '../artifacts/contracts/test/uniswap_v2_pair.sol/UniswapV2Pair.json'
 import IUniswapV2Pair from '../artifacts/contracts/interfaces/IUniswapV2Pair.sol/IUniswapV2Pair.json'
 import DePayLiquidityStaking from '../artifacts/contracts/DePayLiquidityStaking.sol/DePayLiquidityStaking.json'
+import IDePayLiquidityStaking from '../artifacts/contracts/interfaces/IDePayLiquidityStaking.sol/IDePayLiquidityStaking.json'
 
 const { waffle, ethers } = require("hardhat")
 const {
