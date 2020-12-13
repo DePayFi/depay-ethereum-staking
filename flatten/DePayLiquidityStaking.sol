@@ -1,6 +1,22 @@
-// Dependency file: @openzeppelin/contracts/token/ERC20/IERC20.sol
+// Dependency file: contracts/interfaces/IUniswapV2Pair.sol
 
 // SPDX-License-Identifier: MIT
+
+// pragma solidity >=0.7.5 <0.8.0;
+
+interface IUniswapV2Pair {
+    
+    function totalSupply() external view returns (uint);
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function transfer(address to, uint value) external returns (bool);
+    function transferFrom(address from, address to, uint value) external returns (bool);
+    function token0() external view returns (address);
+
+}
+
+
+// Dependency file: @openzeppelin/contracts/token/ERC20/IERC20.sol
+
 
 // pragma solidity >=0.6.0 <0.8.0;
 
@@ -76,73 +92,6 @@ interface IERC20 {
      * a call to {approve}. `value` is the new allowance.
      */
     event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-
-// Dependency file: contracts/interfaces/IUniswapV2Pair.sol
-
-
-// pragma solidity >=0.7.5 <0.8.0;
-
-interface IUniswapV2Pair {
-    
-    function totalSupply() external view returns (uint);
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-    function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
-    function token0() external view returns (address);
-
-}
-
-
-// Dependency file: contracts/interfaces/IDePayLiquidityStaking.sol
-
-
-// pragma solidity >=0.7.5 <0.8.0;
-
-// import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// import 'contracts/interfaces/IUniswapV2Pair.sol';
-
-interface IDePayLiquidityStaking {
-  
-  function startTime() external view returns (uint256);
-  function closeTime() external view returns (uint256);
-  function releaseTime() external view returns (uint256);
-  function rewardsAmount() external view returns (uint256);
-  function percentageYield() external view returns (uint256);
-  function allocatedStakingRewards() external view returns (uint256);
-  
-  function token() external view returns (IERC20);
-  function liquidityToken() external view returns (IUniswapV2Pair);
-
-  function unstakeEarlyAllowed() external view returns (bool);
-  
-  function rewardsPerAddress(address) external view returns (uint256);
-  function stakedLiquidityTokenPerAddress(address) external view returns (uint256);
-
-  function init(
-      uint256 _startTime,
-      uint256 _closeTime,
-      uint256 _releaseTime,
-      uint256 _percentageYield,
-      address _liquidityToken,
-      address _token
-  ) external;
-
-  function stake(
-    uint256 stakedLiquidityTokenAmount
-  ) external;
-
-  function withdraw(
-    address tokenAddress,
-    uint amount
-  ) external;
-
-  function unstake() external;
-
-  function enableUnstakeEarly() external;
-
-  function unstakeEarly() external;
 }
 
 
@@ -722,7 +671,6 @@ abstract contract Ownable is Context {
 
 pragma solidity >=0.7.5 <0.8.0;
 
-// import 'contracts/interfaces/IDePayLiquidityStaking.sol';
 // import 'contracts/interfaces/IUniswapV2Pair.sol';
 
 // import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -731,44 +679,50 @@ pragma solidity >=0.7.5 <0.8.0;
 // import "@openzeppelin/contracts/access/Ownable.sol";
 // import "@openzeppelin/contracts/math/SafeMath.sol";
 
-contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGuard {
+contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
   
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
   // Epoch time when staking starts: People are allowed to stake
-  uint256 public override startTime;
+  uint256 public startTime;
 
   // Epoch time when staking has been closed: People are not allowed to stake anymore
-  uint256 public override closeTime;
+  uint256 public closeTime;
 
   // Epoch time when staking releases staked liquidity + rewards: People can withdrawal
-  uint256 public override releaseTime;
+  uint256 public releaseTime;
 
   // Total amount of staking rewards available
-  uint256 public override rewardsAmount;
+  uint256 public rewardsAmount;
 
   // Percentage Yield, will be divided by 100, e.g. set 80 for 80%
-  uint256 public override percentageYield;
+  uint256 public percentageYield;
 
   // Total amount of already allocated staking rewards
-  uint256 public override allocatedStakingRewards;
+  uint256 public allocatedStakingRewards;
 
   // Address of the Uniswap liquidity pair (token)
-  IUniswapV2Pair public override liquidityToken;
+  IUniswapV2Pair public liquidityToken;
 
   // Address of the token used for rewards
-  IERC20 public override token;
+  IERC20 public token;
 
   // Indicating if unstaking early is allowed or not
   // This is used to upgrade liquidity to uniswap v3
-  bool public override unstakeEarlyAllowed;
+  bool public unstakeEarlyAllowed;
 
   // Stores all rewards per address
-  mapping (address => uint256) public override rewardsPerAddress;
+  mapping (address => uint256) public rewardsPerAddress;
 
   // Stores all amounts of staked liquidity tokens per address
-  mapping (address => uint256) public override stakedLiquidityTokenPerAddress;
+  mapping (address => uint256) public stakedLiquidityTokenPerAddress;
+
+  // Token Reserve On initialization, used to calculate rewards upon staking
+  uint256 public tokenReserveOnInit;
+  
+  // Liquidity Token Total Supply on initialization, used to calculate rewards upon staking
+  uint256 public liquidityTokenTotalSupplyOnInit;
 
   modifier onlyUnstarted() {
     require(
@@ -810,10 +764,11 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
       uint256 _percentageYield,
       address _liquidityToken,
       address _token
-  ) override external onlyOwner onlyUnstarted {
+  ) external onlyOwner onlyUnstarted returns(bool) {
     require(isContract(_token), '_token address needs to be a contract!');
     require(isContract(_liquidityToken), '_liquidityToken address needs to be a contract!');
     require(_startTime < _closeTime && _closeTime < _releaseTime, '_startTime needs to be before _closeTime needs to be before _releaseTime!');
+    
     startTime = _startTime;
     closeTime = _closeTime;
     releaseTime = _releaseTime;
@@ -821,29 +776,25 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     liquidityToken = IUniswapV2Pair(_liquidityToken);
     token = IERC20(_token);
     rewardsAmount = token.balanceOf(address(this));
+
+    require(liquidityToken.token0() == address(token), 'Rewards must be calculated based on the reward token address!');
+    (tokenReserveOnInit,,) = liquidityToken.getReserves();
+    liquidityTokenTotalSupplyOnInit = liquidityToken.totalSupply();
+
+    return true;
   }
 
   function stake(
     uint256 stakedLiquidityTokenAmount
-  ) override external onlyStarted onlyUnclosed nonReentrant {
+  ) external onlyStarted onlyUnclosed nonReentrant returns(bool) {
     require(
       liquidityToken.transferFrom(msg.sender, address(this), stakedLiquidityTokenAmount),
       'Depositing liquidity token failed!'
     );
 
-    uint112 reserve0;
-    uint112 reserve1;
-    uint32 blockTimestampLast;
-    (reserve0, reserve1, blockTimestampLast) = liquidityToken.getReserves();
-
-    require(
-      liquidityToken.token0() == address(token),
-      'Rewards must be calculated based on the reward token reserve!'
-    );
-
     uint256 rewards = stakedLiquidityTokenAmount
-      .mul(reserve0)
-      .div(liquidityToken.totalSupply())
+      .mul(tokenReserveOnInit)
+      .div(liquidityTokenTotalSupplyOnInit)
       .mul(percentageYield)
       .div(100);
 
@@ -852,6 +803,8 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
 
     allocatedStakingRewards = allocatedStakingRewards.add(rewards);
     require(allocatedStakingRewards <= rewardsAmount, 'Staking overflows rewards!');
+
+    return true;
   }
 
   function payableOwner() view private returns(address payable) {
@@ -861,7 +814,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
   function withdraw(
     address tokenAddress,
     uint amount
-  ) override external onlyOwner nonReentrant {
+  ) external onlyOwner nonReentrant returns(bool) {
     require(tokenAddress != address(liquidityToken), 'Not allowed to withdrawal liquidity tokens!');
     
     if(tokenAddress == address(token)) {
@@ -873,6 +826,7 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     }
 
     IERC20(tokenAddress).safeTransfer(payableOwner(), amount);
+    return true;
   }
 
   function _unstakeLiquidity() private {
@@ -894,22 +848,25 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     );
   }
 
-  function unstake() override external onlyReleasable nonReentrant {
+  function unstake() external onlyReleasable nonReentrant returns(bool) {
     _unstakeLiquidity();
     _unstakeRewards();
+    return true;
   }
 
-  function enableUnstakeEarly() override external onlyOwner {
+  function enableUnstakeEarly() external onlyOwner returns(bool) {
     unstakeEarlyAllowed = true;
+    return true;
   }
 
-  function unstakeEarly() override external onlyUnstakeEarly nonReentrant {
+  function unstakeEarly() external onlyUnstakeEarly nonReentrant returns(bool) {
     _unstakeLiquidity();
     allocatedStakingRewards = allocatedStakingRewards.sub(rewardsPerAddress[msg.sender]);
     rewardsPerAddress[msg.sender] = 0;
+    return true;
   }
 
-  function isContract(address account) internal view returns (bool) {
+  function isContract(address account) internal view returns(bool) {
     // According to EIP-1052, 0x0 is the value returned for not-yet created accounts
     // and 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470 is returned
     // for accounts without code, i.e. `keccak256('')`
@@ -920,7 +877,8 @@ contract DePayLiquidityStaking is IDePayLiquidityStaking, Ownable, ReentrancyGua
     return (codehash != accountHash && codehash != 0x0);
   }
 
-  function destroy() public onlyOwner onlyDistributedRewards {
+  function destroy() public onlyOwner onlyDistributedRewards returns(bool) {
     selfdestruct(payable(owner()));
+    return true;
   }
 }

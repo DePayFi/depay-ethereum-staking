@@ -120,6 +120,9 @@ interface IDePayLiquidityStaking {
   function rewardsPerAddress(address) external view returns (uint256);
   function stakedLiquidityTokenPerAddress(address) external view returns (uint256);
 
+  function tokenReserveOnInit() external view returns (uint256);
+  function liquidityTokenTotalSupplyOnInit() external view returns (uint256);
+
   function init(
       uint256 _startTime,
       uint256 _closeTime,
@@ -127,20 +130,22 @@ interface IDePayLiquidityStaking {
       uint256 _percentageYield,
       address _liquidityToken,
       address _token
-  ) external;
+  ) external returns(bool);
 
   function stake(
     uint256 stakedLiquidityTokenAmount
-  ) external;
+  ) external returns(bool);
 
   function withdraw(
     address tokenAddress,
     uint amount
-  ) external;
+  ) external returns(bool);
 
-  function unstake() external;
+  function unstake() external returns(bool);
 
-  function enableUnstakeEarly() external;
+  function enableUnstakeEarly() external returns(bool);
 
-  function unstakeEarly() external;
+  function unstakeEarly() external returns(bool);
+
+  function destroy() external returns(bool);
 }

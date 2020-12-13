@@ -577,8 +577,10 @@ contract ERC20 is Context, IERC20 {
 }
 
 
-// Root file: contracts/uniswap_v2_pair.sol
+// Root file: contracts/test/uniswap_v2_pair.sol
 
+
+// used for running automated hardhat tests
 
 pragma solidity >=0.7.5 <0.8.0;
 
