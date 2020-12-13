@@ -22,6 +22,9 @@ interface IDePayLiquidityStaking {
   function rewardsPerAddress(address) external view returns (uint256);
   function stakedLiquidityTokenPerAddress(address) external view returns (uint256);
 
+  function tokenReserveOnInit() external view returns (uint256);
+  function liquidityTokenTotalSupplyOnInit() external view returns (uint256);
+
   function init(
       uint256 _startTime,
       uint256 _closeTime,

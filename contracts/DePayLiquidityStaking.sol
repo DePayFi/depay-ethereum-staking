@@ -49,6 +49,12 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
   // Stores all amounts of staked liquidity tokens per address
   mapping (address => uint256) public stakedLiquidityTokenPerAddress;
 
+  // Token Reserve On initialization, used to calculate rewards upon staking
+  uint256 public tokenReserveOnInit;
+  
+  // Liquidity Token Total Supply on initialization, used to calculate rewards upon staking
+  uint256 public liquidityTokenTotalSupplyOnInit;
+
   modifier onlyUnstarted() {
     require(
       startTime == 0 || block.timestamp < startTime,
@@ -93,6 +99,7 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
     require(isContract(_token), '_token address needs to be a contract!');
     require(isContract(_liquidityToken), '_liquidityToken address needs to be a contract!');
     require(_startTime < _closeTime && _closeTime < _releaseTime, '_startTime needs to be before _closeTime needs to be before _releaseTime!');
+    
     startTime = _startTime;
     closeTime = _closeTime;
     releaseTime = _releaseTime;
@@ -100,6 +107,11 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
     liquidityToken = IUniswapV2Pair(_liquidityToken);
     token = IERC20(_token);
     rewardsAmount = token.balanceOf(address(this));
+
+    require(liquidityToken.token0() == address(token), 'Rewards must be calculated based on the reward token address!');
+    (tokenReserveOnInit,,) = liquidityToken.getReserves();
+    liquidityTokenTotalSupplyOnInit = liquidityToken.totalSupply();
+
     return true;
   }
 
@@ -111,19 +123,9 @@ contract DePayLiquidityStaking is Ownable, ReentrancyGuard {
       'Depositing liquidity token failed!'
     );
 
-    uint112 reserve0;
-    uint112 reserve1;
-    uint32 blockTimestampLast;
-    (reserve0, reserve1, blockTimestampLast) = liquidityToken.getReserves();
-
-    require(
-      liquidityToken.token0() == address(token),
-      'Rewards must be calculated based on the reward token reserve!'
-    );
-
     uint256 rewards = stakedLiquidityTokenAmount
-      .mul(reserve0)
-      .div(liquidityToken.totalSupply())
+      .mul(tokenReserveOnInit)
+      .div(liquidityTokenTotalSupplyOnInit)
       .mul(percentageYield)
       .div(100);
 
