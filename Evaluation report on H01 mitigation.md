@@ -30,7 +30,7 @@ H01 was fully mitigated by initializing all parameters used for calculating `rew
 
  If the `stake` function uses these initialized parameters in its calculation algorithm, then there is no avenue for a change in the output of `rewards` . 
 
- H01 has been fully mitigated and no further output is required
+ H01 has been fully mitigated and no further action is required
 
 
 
