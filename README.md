@@ -1,15 +1,11 @@
 Mainnet
 
-- December 2020: https://etherscan.io/address/0xe52c3ea072b3388dfa272d3c32723b8c5a232d90
-- January 2021: https://etherscan.io/address/0x21a029a338005f0a8F3A2F4a0CFb7D7f91b56e65
-- (February)
-- (March)
-- (April)
-- (May)
-- (Juni)
-- (Juli)
-- (August)
-- (September)
+- December 2020-2021: https://etherscan.io/address/0xe52c3ea072b3388dfa272d3c32723b8c5a232d90
+- January 2021-2022: https://etherscan.io/address/0x21a029a338005f0a8F3A2F4a0CFb7D7f91b56e65
+- February 2021-2022: https://etherscan.io/address/0x98eaa281b5606a19c7f7ef966d5fb687bca360f4
+- March 2021-2022: https://etherscan.io/address/0x126332e41655e313205e962cd0cb8041b2bdae2a
+- April 2021-2022: https://etherscan.io/address/0x7d4735d924995ed437c413b69814ec49e904b81e
+- May 2021-2022: https://etherscan.io/address/0xaded2aee9dabecbbcfc7abcf8cda03dd57e1f2af
 
 Ropsten:
 
